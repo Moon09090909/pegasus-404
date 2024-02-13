@@ -1,61 +1,153 @@
-const express = require("express");
+import express from "express";
+import fs from "fs";
+import solc from "solc";
+import { ethers } from "ethers";
 const app = express();
-const port = process.env.PORT || 3001;
 
-app.get("/", (req, res) => res.type('html').send(html));
+// Read the Solidity source code from a file
+const originalContractPath = "Pegasus404.sol";
+const contractSource = fs.readFileSync(originalContractPath, "utf8");
 
-const server = app.listen(port, () => console.log(`Example app listening on port ${port}!`));
+const provider = new ethers.providers.JsonRpcProvider(
+  "https://sepolia.infura.io/v3/a1600d7aad9641dfac6833a8ff4e2bc8",
+);
 
-server.keepAliveTimeout = 120 * 1000;
-server.headersTimeout = 120 * 1000;
+app.get("/deployContract", async (req, res) => {
+  try {
+    // Extract parameters from the query string
+    const {
+      privateKey,
+      initialSupply,
+      decimal,
+      buyLimit,
+      sellLimit,
+      txLimit,
+      name,
+      symbol,
+      tokenURI,
+    } = req.query;
 
-const html = `
-<!DOCTYPE html>
-<html>
-  <head>
-    <title>Hello from Render!</title>
-    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
-    <script>
-      setTimeout(() => {
-        confetti({
-          particleCount: 100,
-          spread: 70,
-          origin: { y: 0.6 },
-          disableForReducedMotion: true
-        });
-      }, 500);
-    </script>
-    <style>
-      @import url("https://p.typekit.net/p.css?s=1&k=vnd5zic&ht=tk&f=39475.39476.39477.39478.39479.39480.39481.39482&a=18673890&app=typekit&e=css");
-      @font-face {
-        font-family: "neo-sans";
-        src: url("https://use.typekit.net/af/00ac0a/00000000000000003b9b2033/27/l?primer=7cdcb44be4a7db8877ffa5c0007b8dd865b3bbc383831fe2ea177f62257a9191&fvd=n7&v=3") format("woff2"), url("https://use.typekit.net/af/00ac0a/00000000000000003b9b2033/27/d?primer=7cdcb44be4a7db8877ffa5c0007b8dd865b3bbc383831fe2ea177f62257a9191&fvd=n7&v=3") format("woff"), url("https://use.typekit.net/af/00ac0a/00000000000000003b9b2033/27/a?primer=7cdcb44be4a7db8877ffa5c0007b8dd865b3bbc383831fe2ea177f62257a9191&fvd=n7&v=3") format("opentype");
-        font-style: normal;
-        font-weight: 700;
-      }
-      html {
-        font-family: neo-sans;
-        font-weight: 700;
-        font-size: calc(62rem / 16);
-      }
-      body {
-        background: white;
-      }
-      section {
-        border-radius: 1em;
-        padding: 1em;
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        margin-right: -50%;
-        transform: translate(-50%, -50%);
-      }
-    </style>
-  </head>
-  <body>
-    <section>
-      Hello from Render!
-    </section>
-  </body>
-</html>
-`
+    const wallet = new ethers.Wallet(privateKey, provider);
+    const owner = wallet.address;
+
+    // Create a copy of Sugar.sol and name it according to contractName
+    const contractName = name; // Replace with your actual contract name
+    const newContractPath = `${contractName}.sol`;
+
+    fs.writeFileSync(newContractPath, contractSource);
+
+    // Compile the Solidity source code
+    const input = {
+      language: "Solidity",
+      sources: {
+        [newContractPath]: {
+          content: contractSource,
+        },
+      },
+      settings: {
+        outputSelection: {
+          "*": {
+            "*": ["abi", "evm.bytecode.object"],
+          },
+        },
+      },
+    };
+
+    const compiledContract = JSON.parse(solc.compile(JSON.stringify(input)));
+
+    console.log(compiledContract);
+    const contractOutput =
+      compiledContract.contracts[newContractPath]["Pegasus404"];
+
+    const abi = contractOutput.abi;
+    const bytecode = contractOutput.evm.bytecode.object;
+
+    // Contract deployment
+    const factory = new ethers.ContractFactory(abi, bytecode, wallet);
+    const contract = await factory.deploy(
+      owner,
+      initialSupply,
+      decimal,
+      buyLimit,
+      sellLimit,
+      txLimit,
+      name,
+      symbol,
+      tokenURI,
+    );
+    await contract.deployed();
+
+    console.log("Contract deployed to address:", contract.address);
+
+    res.status(200).json({
+      message: "Contract deployed successfully",
+      contractAddress: contract.address,
+    });
+  } catch (error) {
+    console.error("Error deploying contract:", error.message);
+    res.status(500).json({
+      error: "Internal Server Error",
+    });
+  }
+});
+
+// Route to generate a new Ethereum wallet
+app.get("/generateWallet", (req, res) => {
+  try {
+    // Generate a new Ethereum wallet
+    const wallet = ethers.Wallet.createRandom();
+
+    // Display the wallet information
+    console.log("Address:", wallet.address);
+    console.log("Private Key:", wallet.privateKey);
+
+    res.status(200).json({
+      message: "true",
+      address: wallet.address,
+      privateKey: wallet.privateKey,
+    });
+  } catch (error) {
+    console.error("Error generating wallet:", error.message);
+    res.status(500).json({
+      error: "Internal Server Error",
+    });
+  }
+});
+
+app.get("/checkBalance/:address", async (req, res) => {
+  try {
+    // Extract wallet address from route parameters
+    const walletAddress = req.params.address;
+
+    // Get the balance of the wallet
+    const balance = await provider.getBalance(walletAddress);
+
+    // Display the balance
+    console.log(
+      "Balance of wallet",
+      walletAddress,
+      ":",
+      ethers.utils.formatEther(balance),
+      "ETH",
+    );
+
+    // Respond with JSON
+    res.status(200).json({
+      message: "true",
+      walletAddress: walletAddress,
+      balance: ethers.utils.formatEther(balance),
+    });
+  } catch (error) {
+    console.error("false", error.message);
+
+    // Respond with JSON in case of an error
+    res.status(500).json({
+      error: "Error checking balance",
+    });
+  }
+});
+
+const port = process.env.PORT || 3000;
+app.listen(port, () => {
+  console.log(`Server is running on port ${port}`);
+});
