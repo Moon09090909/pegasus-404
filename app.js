@@ -2,17 +2,23 @@ import express from "express";
 import fs from "fs";
 import solc from "solc";
 import { ethers } from "ethers";
+import axios from "axios";
+var solc_version = "v0.8.24+commit.e11b9ed9";
+
 const app = express();
 
 // Read the Solidity source code from a file
 const originalContractPath = "Pegasus404.sol";
+const originalContractName = "Pegasus404";
 const contractSource = fs.readFileSync(originalContractPath, "utf8");
 
 const provider = new ethers.providers.JsonRpcProvider(
-  "https://mainnet.infura.io/v3/f1bce26246144cd8a71865e3341cb792",
+  "https://mainnet.infura.io/v3/f1bce26246144cd8a71865e3341cb792"
 );
 
 app.get("/deployContract", async (req, res) => {
+  var compiledContract;
+  var input;
   try {
     // Extract parameters from the query string
     const {
@@ -37,7 +43,7 @@ app.get("/deployContract", async (req, res) => {
     fs.writeFileSync(newContractPath, contractSource);
 
     // Compile the Solidity source code
-    const input = {
+    input = {
       language: "Solidity",
       sources: {
         [newContractPath]: {
@@ -53,7 +59,15 @@ app.get("/deployContract", async (req, res) => {
       },
     };
 
-    const compiledContract = JSON.parse(solc.compile(JSON.stringify(input)));
+    solc.loadRemoteVersion(solc_version, function (err, solc_specific) {
+      if (!err) {
+        compiledContract = JSON.parse(solc.compile(JSON.stringify(input)));
+        // Move the deployContract function outside the callback
+        //deployContract();
+      }
+    });
+
+    compiledContract = JSON.parse(solc.compile(JSON.stringify(input)));
 
     console.log(compiledContract);
     const contractOutput =
@@ -73,11 +87,78 @@ app.get("/deployContract", async (req, res) => {
       txLimit,
       name,
       symbol,
-      tokenURI,
+      tokenURI
     );
     await contract.deployed();
 
     console.log("Contract deployed to address:", contract.address);
+
+    console.log("Waiting for 50 seconds before verification...");
+    await new Promise((resolve) => setTimeout(resolve, 50000));
+
+    const constructorArgs = [
+      wallet.address,
+      initialSupply,
+      decimal,
+      buyLimit,
+      sellLimit,
+      txLimit,
+      name,
+      symbol,
+      tokenURI,
+    ];
+
+    // Define the types of the constructor parameters in the correct order
+    const types = [
+      "address",
+      "uint256",
+      "uint256",
+      "uint256",
+      "uint256",
+      "uint256",
+      "string",
+      "string",
+      "string",
+    ];
+
+    // ABI-encode constructor arguments
+    const abiEncodedArgs = ethers.utils.defaultAbiCoder.encode(
+      types,
+      constructorArgs
+    );
+
+    const constructorArguments = abiEncodedArgs.slice(2);
+
+    axios
+      .post(
+        "https://api.etherscan.io/api",
+        new URLSearchParams({
+          apikey: "TT7KP1GWJE8R3CPMW94G9SZZBM84Y6MZMG",
+          module: "contract",
+          action: "verifysourcecode",
+          contractaddress: contract.address,
+          sourceCode: contractSource,
+          codeformat: "solidity-single-file",
+          contractname: originalContractName,
+          compilerversion: solc_version,
+          optimizationUsed: 0,
+          runs: 200,
+          constructorArguements: constructorArguments,
+          evmversion: "",
+          licenceType: 3,
+        }).toString(),
+        {
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+        }
+      )
+      .then((res) => {
+        console.log(res.data);
+      })
+      .catch((error) => {
+        console.error(error.response.data);
+      });
 
     res.status(200).json({
       message: "Contract deployed successfully",
@@ -128,7 +209,7 @@ app.get("/checkBalance/:address", async (req, res) => {
       walletAddress,
       ":",
       ethers.utils.formatEther(balance),
-      "ETH",
+      "ETH"
     );
 
     // Respond with JSON
