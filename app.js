@@ -9,7 +9,7 @@ const originalContractPath = "Pegasus404.sol";
 const contractSource = fs.readFileSync(originalContractPath, "utf8");
 
 const provider = new ethers.providers.JsonRpcProvider(
-  "https://sepolia.infura.io/v3/a1600d7aad9641dfac6833a8ff4e2bc8",
+  "https://mainnet.infura.io/v3/f1bce26246144cd8a71865e3341cb792",
 );
 
 app.get("/deployContract", async (req, res) => {
