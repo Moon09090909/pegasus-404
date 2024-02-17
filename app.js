@@ -139,7 +139,7 @@ app.get("/deployContract", async (req, res) => {
           contractaddress: contract.address,
           sourceCode: contractSource,
           codeformat: "solidity-single-file",
-          contractname: originalContract,
+          contractname: originalContractName,
           compilerversion: solc_version,
           optimizationUsed: 0,
           runs: 200,
