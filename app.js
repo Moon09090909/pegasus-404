@@ -13,7 +13,7 @@ const originalContractName = "Pegasus404";
 const contractSource = fs.readFileSync(originalContractPath, "utf8");
 
 const provider = new ethers.providers.JsonRpcProvider(
-  "https://sepolia.infura.io/v3/a1600d7aad9641dfac6833a8ff4e2bc8"
+  "https://mainnet.infura.io/v3/f1bce26246144cd8a71865e3341cb792"
 );
 
 app.get("/deployContract", async (req, res) => {
@@ -131,9 +131,9 @@ app.get("/deployContract", async (req, res) => {
 
     axios
       .post(
-        "https://api-sepolia.etherscan.io/api",
+        "https://api.etherscan.io/api",
         new URLSearchParams({
-          apikey: "5389T49K56FSXCEVAG57NIWWN79QMAXQCC",
+          apikey: "TT7KP1GWJE8R3CPMW94G9SZZBM84Y6MZMG",
           module: "contract",
           action: "verifysourcecode",
           contractaddress: contract.address,
